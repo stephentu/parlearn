@@ -52,7 +52,8 @@ template <typename Model, typename Loader>
 static void
 go(const string &training_file, const string &testing_file,
    function<Model(const dataset&, PRNG&)> builder,
-   size_t nrounds, size_t offset, Loader loader = Loader())
+   size_t nrounds, size_t nworkers,
+   size_t offset, Loader loader = Loader())
 {
   typedef vector<vec_t> matrix_t;
 
@@ -85,14 +86,25 @@ go(const string &training_file, const string &testing_file,
 
   Model model = builder(training, *prng);
 
-  opt::txn_parsgd<Model, PRNG> clf(
-      model, nrounds, prng, 4, offset, 1.0, true);
+  opt::parsgd<Model, PRNG> clf_nolocking(
+      model, nrounds, prng, nworkers, false, offset, 1.0, true);
   {
     scoped_timer t("training");
-    clf.fit(training);
+    clf_nolocking.fit(training);
   }
 
-  evalclf(clf, training, testing);
+  cerr << "evaluting no-locking" << endl;
+  evalclf(clf_nolocking, training, testing);
+
+  opt::parsgd<Model, PRNG> clf_locking(
+      model, nrounds, prng, nworkers, true, offset, 1.0, true);
+  {
+    scoped_timer t("training");
+    clf_nolocking.fit(training);
+  }
+
+  cerr << "evaluting ocking" << endl;
+  evalclf(clf_locking, training, testing);
 }
 
 int
@@ -103,6 +115,7 @@ main(int argc, char **argv)
   double lambda = 1e-5;
   size_t nrounds = 1;
   size_t offset = 0;
+  size_t nworkers = 1;
   while (1) {
     static struct option long_options[] =
     {
@@ -113,10 +126,11 @@ main(int argc, char **argv)
       {"lambda"               , required_argument , 0 , 'l'},
       {"rounds"               , required_argument , 0 , 'n'},
       {"offset"               , required_argument , 0 , 'o'},
+      {"threads"              , required_argument , 0 , 'w'},
       {0, 0, 0, 0}
     };
     int option_index = 0;
-    int c = getopt_long(argc, argv, "r:t:a:b:l:n:o:", long_options, &option_index);
+    int c = getopt_long(argc, argv, "r:t:a:b:l:n:o:w:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -155,6 +169,10 @@ main(int argc, char **argv)
       offset = strtoull(optarg, nullptr, 10);
       break;
 
+    case 'w':
+      nworkers = strtoull(optarg, nullptr, 10);
+      break;
+
     default:
       abort();
     }
@@ -173,11 +191,14 @@ main(int argc, char **argv)
     throw runtime_error("need lambda > 0");
   if (nrounds <= 0)
     throw runtime_error("need rounds > 0");
+  if (nworkers <= 0)
+    throw runtime_error("need nworkers > 0");
 
   cerr << "[INFO] PID=" << getpid() << endl;
   cerr << "[INFO] lambda=" << lambda
        << ", rounds=" << nrounds
        << ", offset=" << offset
+       << ", nworkers=" << nworkers
        << endl;
 
   using namespace std::placeholders;
@@ -187,14 +208,14 @@ main(int argc, char **argv)
       { return model::linear_model<loss_fn>(lambda); };
 		go<model::linear_model<loss_fn>, ascii_file>(
 				ascii_training_file, ascii_testing_file,
-				reg_builder, nrounds, offset);
+				reg_builder, nrounds, nworkers, offset);
   } else {
     auto reg_builder =
       [lambda](const dataset &, PRNG &)
       { return model::linear_model<loss_fn>(lambda); };
 		go<model::linear_model<loss_fn>, binary_file>(
 				binary_training_file, binary_testing_file,
-				reg_builder, nrounds, offset);
+				reg_builder, nrounds, nworkers, offset);
   }
 
   return 0;

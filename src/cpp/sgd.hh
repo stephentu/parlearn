@@ -21,23 +21,25 @@
 namespace opt {
 
 template <typename Model, typename Generator>
-class txn_parsgd : public classifier::base_iterative_clf<Model, Generator> {
+class parsgd : public classifier::base_iterative_clf<Model, Generator> {
 public:
 
   typedef Model model_type;
   typedef Generator generator_type;
 
-  txn_parsgd(const Model &model,
-             size_t nrounds,
-             const std::shared_ptr<Generator> &prng,
-             size_t nworkers,
-             size_t t_offset = 0,
-             double c0 = 1.0,
-             bool verbose = false)
+  parsgd(const Model &model,
+         size_t nrounds,
+         const std::shared_ptr<Generator> &prng,
+         size_t nworkers,
+         bool do_locking,
+         size_t t_offset = 0,
+         double c0 = 1.0,
+         bool verbose = false)
     : classifier::base_iterative_clf<Model, Generator>(model, nrounds, prng, verbose),
       t_offset_(t_offset),
       c0_(c0),
-      nworkers_(nworkers)
+      nworkers_(nworkers),
+      do_locking_(do_locking)
   {
     ALWAYS_ASSERT(c0_ > 0.0);
     ALWAYS_ASSERT(nworkers_ > 0);
@@ -83,7 +85,7 @@ public:
         futures.emplace_back(
           workers[i]->enq(
             std::bind(
-              &txn_parsgd::work,
+              &parsgd::work,
               this,
               round+1,
               it_beg + i*nelems_per_worker,
@@ -103,8 +105,10 @@ public:
 
   inline size_t get_t_offset() const { return t_offset_; }
   inline double get_c0() const { return c0_; }
+  inline size_t get_nworkers() const { return nworkers_; }
+  inline bool get_do_locking() const { return do_locking_; }
 
-  std::string name() const OVERRIDE { return "txn_parsgd"; }
+  std::string name() const OVERRIDE { return "parsgd"; }
 
   std::map<std::string, std::string>
   mapconfig() const OVERRIDE
@@ -114,6 +118,8 @@ public:
     m["clf_name"]       = name();
     m["clf_t_offset"]   = std::to_string(t_offset_);
     m["clf_c0"]         = std::to_string(c0_);
+    m["clf_nworkers"]   = std::to_string(nworkers_);
+    m["clf_do_locking"] = std::to_string(do_locking_);
     return m;
   }
 
@@ -163,7 +169,8 @@ private:
     const double eta_t = c0_ / (this->model_.get_lambda() * t_eff);
     for (auto it = begin; it != end; ++it) {
       const auto &x = *it.first();
-      lockall(x);
+      if (do_locking_)
+        lockall(x);
       const double dloss = this->model_.get_lossfn().dloss(
           *it.second(), dot(x, *state_.get()));
       const auto inner_it_end = x.end();
@@ -176,7 +183,8 @@ private:
             (1.0 - this->model_.get_lambda() * eta_t) * w -
               eta_t * (*inner_it) * dloss);
       }
-      unlockall(x);
+      if (do_locking_)
+        unlockall(x);
     }
     return false;
   }
@@ -184,6 +192,7 @@ private:
   size_t t_offset_;
   double c0_;
   size_t nworkers_;
+  bool do_locking_;
   std::unique_ptr<standard_tvec<double>> state_;
 };
 
