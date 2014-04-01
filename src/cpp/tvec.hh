@@ -85,7 +85,7 @@ public:
   inline version_t
   stablev(size_t idx) const
   {
-    assert(impl_.size() < idx);
+    assert(idx < impl_.size());
     const auto &ref = impl_[idx];
     version_t ret = ref.first;
     while (ret & LOCK_MASK) {
@@ -100,7 +100,7 @@ public:
   inline version_t
   unstablev(size_t idx) const
   {
-    assert(impl_.size() < idx);
+    assert(idx < impl_.size());
     return impl_[idx].first;
   }
 
@@ -108,7 +108,7 @@ public:
   checkv(size_t idx, version_t v) const
   {
     assert(!(v & LOCK_MASK));
-    assert(impl_.size() < idx);
+    assert(idx < impl_.size());
     compiler_barrier();
     return impl_[idx].first == v;
   }
@@ -116,14 +116,14 @@ public:
   inline T
   unsaferead(size_t idx) const
   {
-    assert(impl_.size() < idx);
+    assert(idx < impl_.size());
     return impl_[idx].second;
   }
 
   inline void
   unsafewrite(size_t idx, const T &t)
   {
-    assert(impl_.size() < idx);
+    assert(idx < impl_.size());
     assert(impl_[idx].first & LOCK_MASK);
     impl_[idx].second = t;
   }
@@ -131,7 +131,7 @@ public:
   inline void
   lock(size_t idx)
   {
-    assert(impl_.size() < idx);
+    assert(idx < impl_.size());
     version_t v = impl_[idx].first;
     while ((v & LOCK_MASK) ||
            !__sync_bool_compare_and_swap(&v, v, v | LOCK_MASK)) {
@@ -145,7 +145,7 @@ public:
   unlock(size_t idx)
   {
     compiler_barrier();
-    assert(impl_.size() < idx);
+    assert(idx < impl_.size());
     const version_t v = impl_[idx].first;
     assert(v & LOCK_MASK);
     impl_[idx].first = v & ~LOCK_MASK;
