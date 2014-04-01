@@ -1,3 +1,6 @@
 *.o
 *.swp
+*.d
 /tags
+/config.mk
+/tlearn
