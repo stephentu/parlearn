@@ -124,7 +124,7 @@ public:
   unsafewrite(size_t idx, const T &t)
   {
     assert(idx < impl_.size());
-    assert(impl_[idx].first & LOCK_MASK);
+    //assert(impl_[idx].first & LOCK_MASK);
     impl_[idx].second = t;
   }
 
@@ -134,7 +134,7 @@ public:
     assert(idx < impl_.size());
     version_t v = impl_[idx].first;
     while ((v & LOCK_MASK) ||
-           !__sync_bool_compare_and_swap(&v, v, v | LOCK_MASK)) {
+           !__sync_bool_compare_and_swap(&impl_[idx].first, v, v | LOCK_MASK)) {
       nop_pause();
       v = impl_[idx].first;
     }

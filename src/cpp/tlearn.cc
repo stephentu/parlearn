@@ -100,10 +100,10 @@ go(const string &training_file, const string &testing_file,
       model, nrounds, prng, nworkers, true, offset, 1.0, true);
   {
     scoped_timer t("training");
-    clf_nolocking.fit(training);
+    clf_locking.fit(training);
   }
 
-  cerr << "evaluting ocking" << endl;
+  cerr << "evaluting locking" << endl;
   evalclf(clf_locking, training, testing);
 }
 

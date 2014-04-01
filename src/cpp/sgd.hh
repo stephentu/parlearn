@@ -101,6 +101,9 @@ public:
       }
     }
     state_->unsafesnapshot(this->model_.weightvec());
+    for (auto &w : workers)
+      w->shutdown();
+    ALWAYS_ASSERT( this->model_.weightvec().size() == shape.second );
   }
 
   inline size_t get_t_offset() const { return t_offset_; }
