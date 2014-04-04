@@ -106,7 +106,7 @@ public:
         futures.emplace_back(
           workers[i]->enq(
             std::bind(
-              &parsgd::work,
+              do_locking_ ? &parsgd::work<true> : &parsgd::work<false>,
               this,
               round+1,
               this->training_sz_,
@@ -158,41 +158,23 @@ public:
 
 private:
 
-  inline void
-  lockall(const vec_t &x)
-  {
-    const auto inner_it_end = x.end();
-    for (auto inner_it = x.begin();
-         inner_it != inner_it_end; ++inner_it) {
-      const size_t feature_idx = inner_it.tell();
-      state_->lock(feature_idx);
-    }
-  }
-
-  inline void
-  unlockall(const vec_t &x)
-  {
-    const auto inner_it_end = x.end();
-    for (auto inner_it = x.begin();
-         inner_it != inner_it_end; ++inner_it) {
-      const size_t feature_idx = inner_it.tell();
-      state_->unlock(feature_idx);
-    }
-  }
-
+  template <bool DoLocking>
   static inline double
-  dot(const vec_t &x, const standard_tvec<double> &b)
+  dot(const vec_t &x, standard_tvec<double> &b)
   {
     double s = 0.0;
     const auto inner_it_end = x.end();
     for (auto inner_it = x.begin();
          inner_it != inner_it_end; ++inner_it) {
       const size_t feature_idx = inner_it.tell();
+      if (DoLocking)
+        b.lock(feature_idx);
       s += (*inner_it) * b.unsaferead(feature_idx);
     }
     return s;
   }
 
+  template <bool DoLocking>
   bool
   work(size_t round,
        size_t dataset_size,
@@ -206,10 +188,8 @@ private:
       const size_t t_eff = (round-1)*dataset_size + i + t_offset_;
       const double eta_t = c0_ / (this->model_.get_lambda() * t_eff);
       const auto &x = *it.first();
-      if (do_locking_)
-        lockall(x);
       const double dloss = this->model_.get_lossfn().dloss(
-          *it.second(), dot(x, *state_.get()));
+          *it.second(), dot<DoLocking>(x, *state_.get()));
       const auto inner_it_end = x.end();
       for (auto inner_it = x.begin();
            inner_it != inner_it_end; ++inner_it) {
@@ -217,12 +197,13 @@ private:
         const double w_old = state_->unsaferead(feature_idx);
         assert(feature_counts[feature_idx]);
         const double w_new =
-          (1.0 - eta_t * this->model_.get_lambda() * dataset_sizef / double(feature_counts[feature_idx])) * w_old
+          (1.0 - eta_t * this->model_.get_lambda() * dataset_sizef /
+           double(feature_counts[feature_idx])) * w_old
           - eta_t * dloss * (*inner_it);
         state_->unsafewrite(feature_idx, w_new);
+        if (DoLocking)
+          state_->unlock(feature_idx);
       }
-      if (do_locking_)
-        unlockall(x);
     }
     return false;
   }
