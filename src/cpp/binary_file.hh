@@ -22,7 +22,7 @@ template <typename T>
 static inline bool
 read_from_istream(std::istream &is, T &t)
 {
-  is.read((char *) &t, sizeof(t));
+  is.read((char *) &t, sizeof(T));
   return is.good();
 }
 
@@ -92,6 +92,7 @@ read_feature_file(
       if (!read_from_istream(ifs, classification) ||
           !read_from_istream(ifs, num_features))
         throw std::runtime_error("bad sparse feature vector desc");
+      ALWAYS_ASSERT(classification == -1 || classification == 1);
       vec_t xv((vec_t::sparse_tag_t()));
       xv.reserve(num_features);
       if (!read_feature_vector(ifs, xv, num_features, true))
@@ -114,6 +115,7 @@ read_feature_file(
       if (!read_from_istream(ifs, classification) ||
           !read_feature_vector(ifs, xv, num_features, false))
         throw std::runtime_error("bad dense feature vector");
+      ALWAYS_ASSERT(classification == -1 || classification == 1);
       xs.push_back(std::move(xv));
       ys.data().push_back(
           static_cast<double>(static_cast<int32_t>(classification)));
@@ -127,7 +129,7 @@ template <typename T>
 static inline bool
 write_to_ostream(std::ostream &o, const T &t)
 {
-  o.write((const char *) &t, sizeof(t));
+  o.write((const char *) &t, sizeof(T));
   return o.good();
 }
 
@@ -154,6 +156,7 @@ write_feature_file(
       const auto &xv = xs[i];
       const int8_t classification =
         static_cast<int32_t>(ys[i]);
+      ALWAYS_ASSERT(classification == -1 || classification == 1);
       const uint32_t num_features = xv.nnz();
       if (!write_to_ostream(ofs, classification) ||
           !write_to_ostream(ofs, num_features))
@@ -177,6 +180,7 @@ write_feature_file(
       assert(xv.nnz() == num_features);
       const int8_t classification =
         static_cast<int32_t>(ys[i]);
+      ALWAYS_ASSERT(classification == -1 || classification == 1);
       if (!write_to_ostream(ofs, classification))
         return -1;
       for (auto v : xv.as_standard_ref().data())

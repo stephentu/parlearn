@@ -28,7 +28,7 @@ read_feature_file(
     // class
     double y;
     l >> y;
-    assert(y == -1.0 || y == 1.0);
+    ALWAYS_ASSERT(y == -1.0 || y == 1.0);
     ys.as_standard_ref().data().push_back(y);
 
     vec_t xv; // dense vec

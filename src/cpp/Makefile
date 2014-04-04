@@ -40,11 +40,11 @@ all: $(PROGS)
 $(PROGS): %: %.o $(OBJFILES)
 	$(CXX) $< -o $@ $(OBJFILES) $(LDFLAGS)
 
-DEPFILES := $(wildcard *.d)
+DEPFILES := $(wildcard *.d converters/*.d)
 ifneq ($(DEPFILES),)
 -include $(DEPFILES)
 endif
 
 .PHONY: clean
 clean:
-	rm -f *.o *.d $(PROGS)
+	rm -f *.o *.d converters/*.o converters/*.d $(PROGS)
