@@ -453,6 +453,21 @@ public:
     }
   }
 
+  inline std::vector<size_t>
+  feature_counts() const
+  {
+    std::vector<size_t> ret(x_shape_.second);
+    const auto it_end = x_end();
+    for (auto it = x_begin(); it != it_end; ++it) {
+      const auto &x = *it;
+      const auto inner_it_end = x.end();
+      for (auto inner_it = x.begin();
+           inner_it != inner_it_end; ++inner_it)
+        ret[inner_it.tell()]++;
+    }
+    return ret;
+  }
+
 private:
 
   bool do_parallel_materialize();

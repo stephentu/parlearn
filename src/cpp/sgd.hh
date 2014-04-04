@@ -61,6 +61,13 @@ public:
 
     const auto shape = transformed.get_x_shape();
     this->training_sz_ = shape.first;
+    const auto feature_counts = transformed.feature_counts();
+
+    //if (this->verbose_) {
+    //  for (size_t i = 0; i < feature_counts.size(); i++)
+    //    if (!feature_counts[i])
+    //      std::cerr << "[WARN] feature idx " << i << " is never used!" << std::endl;
+    //}
 
     this->state_.reset(new standard_tvec<double>(shape.second));
     this->w_history_.clear();
@@ -103,6 +110,7 @@ public:
               this,
               round+1,
               this->training_sz_,
+              std::ref(feature_counts),
               it_beg + i*nelems_per_worker,
               ((i+1)==actual_nworkers) ?
                 it_end : (it_beg + (i+1)*nelems_per_worker))));
@@ -188,9 +196,11 @@ private:
   bool
   work(size_t round,
        size_t dataset_size,
+       const std::vector<size_t> &feature_counts,
        dataset::const_iterator begin,
        dataset::const_iterator end)
   {
+    const double dataset_sizef = double(dataset_size);
     size_t i = 1;
     for (auto it = begin; it != end; ++it, ++i) {
       const size_t t_eff = (round-1)*dataset_size + i + t_offset_;
@@ -204,11 +214,12 @@ private:
       for (auto inner_it = x.begin();
            inner_it != inner_it_end; ++inner_it) {
         const size_t feature_idx = inner_it.tell();
-        const double w = state_->unsaferead(feature_idx);
-        state_->unsafewrite(
-            feature_idx,
-            (1.0 - this->model_.get_lambda() * eta_t) * w -
-              eta_t * (*inner_it) * dloss);
+        const double w_old = state_->unsaferead(feature_idx);
+        assert(feature_counts[feature_idx]);
+        const double w_new =
+          (1.0 - eta_t * this->model_.get_lambda() * dataset_sizef / double(feature_counts[feature_idx])) * w_old
+          - eta_t * dloss * (*inner_it);
+        state_->unsafewrite(feature_idx, w_new);
       }
       if (do_locking_)
         unlockall(x);

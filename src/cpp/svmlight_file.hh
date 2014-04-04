@@ -52,10 +52,11 @@ read_feature_file(
       l >> std::skipws >> i >> std::ws;
       if (l.get() != ':')
         return -1;
+      ALWAYS_ASSERT(i >= 1); // 1-based
       double x;
       l >> std::skipws >> x;
-      xv.ensureref(i) = x;
-      n = std::max(n, i + 1);
+      xv.ensureref(i-1) = x;
+      n = std::max(n, i);
     }
 
     xs.push_back(std::move(xv));

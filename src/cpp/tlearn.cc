@@ -18,6 +18,7 @@
 #include <loss_functions.hh>
 #include <metrics.hh>
 #include <timer.hh>
+#include <gd.hh>
 #include <sgd.hh>
 #include <util.hh>
 
@@ -57,7 +58,7 @@ static void
 go(const string &training_file, const string &testing_file,
    function<Model(const dataset&, PRNG&)> builder,
    size_t nrounds, size_t nworkers,
-   size_t offset, Loader loader = Loader())
+   size_t offset, bool test_gd, Loader loader = Loader())
 {
   typedef vector<vec_t> matrix_t;
 
@@ -90,6 +91,16 @@ go(const string &training_file, const string &testing_file,
 
   Model model = builder(training, *prng);
 
+  opt::gd<Model, PRNG> clf_gd(
+      model, nrounds, prng, offset, 1.0, true);
+  {
+    scoped_timer t("training");
+    clf_gd.fit(training);
+  }
+
+  cerr << "evaluting gd" << endl;
+  evalclf(clf_gd, training, testing);
+
   opt::parsgd<Model, PRNG> clf_nolocking(
       model, nrounds, prng, nworkers, false, offset, 1.0, true);
   {
@@ -121,6 +132,7 @@ main(int argc, char **argv)
   size_t nrounds = 1;
   size_t offset = 0;
   size_t nworkers = 1;
+  bool test_gd = true;
   while (1) {
     static struct option long_options[] =
     {
@@ -230,14 +242,14 @@ main(int argc, char **argv)
       { return model::linear_model<loss_fn>(lambda); };
     go<model::linear_model<loss_fn>, ascii_file>(
         ascii_training_file, ascii_testing_file,
-        reg_builder, nrounds, nworkers, offset);
+        reg_builder, nrounds, nworkers, offset, test_gd);
   } else if (!binary_training_file.empty()) {
     auto reg_builder =
       [lambda](const dataset &, PRNG &)
       { return model::linear_model<loss_fn>(lambda); };
     go<model::linear_model<loss_fn>, binary_file>(
         binary_training_file, binary_testing_file,
-        reg_builder, nrounds, nworkers, offset);
+        reg_builder, nrounds, nworkers, offset, test_gd);
   } else {
     ALWAYS_ASSERT(!svmlight_training_file.empty());
     auto reg_builder =
@@ -245,7 +257,7 @@ main(int argc, char **argv)
       { return model::linear_model<loss_fn>(lambda); };
     go<model::linear_model<loss_fn>, svmlight_file>(
         svmlight_training_file, svmlight_testing_file,
-        reg_builder, nrounds, nworkers, offset);
+        reg_builder, nrounds, nworkers, offset, test_gd);
   }
 
   return 0;
