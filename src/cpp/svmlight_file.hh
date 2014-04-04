@@ -30,6 +30,7 @@ read_feature_file(
     // class
     double y;
     l >> y;
+    ALWAYS_ASSERT(y == 0.0 || y == 1.0 || y == -1.0);
 
     // namespace
     if (ns.empty()) {
@@ -58,7 +59,7 @@ read_feature_file(
     }
 
     xs.push_back(std::move(xv));
-    ys.push_back(y);
+    ys.push_back(y == 0.0 ? -1.0 : y);
   }
 
   return 0;
