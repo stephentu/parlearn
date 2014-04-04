@@ -71,6 +71,7 @@ public:
     std::vector< std::unique_ptr<task_executor_thread<bool>> > workers;
     const size_t actual_nworkers =
       (this->training_sz_ < nworkers_) ? 1 : nworkers_;
+    std::cerr << "[INFO] actual_nworkers: " << actual_nworkers << std::endl;
     for (size_t i = 0; i < actual_nworkers; i++)
       workers.emplace_back(new task_executor_thread<bool>);
     const size_t nelems_per_worker =
@@ -81,6 +82,14 @@ public:
       const auto permutation = transformed.permute(*this->prng_);
       const auto it_end = permutation.end();
       const auto it_beg = permutation.begin();
+
+      // Uncomment (and comment out above) to remove randomness each round
+      // (testing purposes)
+      /**
+      const auto it_end = transformed.end();
+      const auto it_beg = transformed.begin();
+      */
+
       for (size_t i = 0; i < actual_nworkers; i++)
         futures.emplace_back(
           workers[i]->enq(
