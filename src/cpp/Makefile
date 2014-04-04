@@ -30,7 +30,7 @@ endif
 SRCFILES := dataset.cc
 OBJFILES = $(SRCFILES:.cc=.o)
 
-PROGS := tlearn
+PROGS := tlearn converters/convert
 
 all: $(PROGS)
 

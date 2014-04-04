@@ -11,6 +11,9 @@
 
 struct ascii_file {
 
+/**
+ * Currently loads in dense vector format
+ */
 int
 read_feature_file(
     const std::string &filename,
@@ -28,7 +31,7 @@ read_feature_file(
     assert(y == -1.0 || y == 1.0);
     ys.as_standard_ref().data().push_back(y);
 
-    vec_t xv;
+    vec_t xv; // dense vec
     xv.reserve(n);
     while (l.good()) {
       double x;
