@@ -97,6 +97,7 @@ public:
               &parsgd::work,
               this,
               round+1,
+              this->training_sz_,
               it_beg + i*nelems_per_worker,
               ((i+1)==actual_nworkers) ?
                 it_end : (it_beg + (i+1)*nelems_per_worker))));
@@ -174,12 +175,14 @@ private:
 
   bool
   work(size_t round,
+       size_t dataset_size,
        dataset::const_iterator begin,
        dataset::const_iterator end)
   {
-    const size_t t_eff = round + t_offset_;
-    const double eta_t = c0_ / (this->model_.get_lambda() * t_eff);
-    for (auto it = begin; it != end; ++it) {
+    size_t i = 0;
+    for (auto it = begin; it != end; ++it, ++i) {
+      const size_t t_eff = (round-1)*dataset_size + i + t_offset_;
+      const double eta_t = c0_ / (this->model_.get_lambda() * t_eff);
       const auto &x = *it.first();
       if (do_locking_)
         lockall(x);
