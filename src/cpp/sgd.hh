@@ -71,7 +71,12 @@ public:
     std::vector< std::unique_ptr<task_executor_thread<bool>> > workers;
     const size_t actual_nworkers =
       (this->training_sz_ < nworkers_) ? 1 : nworkers_;
-    std::cerr << "[INFO] actual_nworkers: " << actual_nworkers << std::endl;
+    if (this->verbose_) {
+      std::cerr << "[INFO] actual_nworkers: " << actual_nworkers << std::endl;
+      std::cerr << "[INFO] starting eta_t: "
+                << c0_ / (this->model_.get_lambda() * (1 + this->t_offset_))
+                << std::endl;
+    }
     for (size_t i = 0; i < actual_nworkers; i++)
       workers.emplace_back(new task_executor_thread<bool>);
     const size_t nelems_per_worker =
@@ -108,6 +113,13 @@ public:
         state_->unsafesnapshot(this->model_.weightvec());
         this->w_history_.emplace_back(
             round + 1, tt.elapsed_usec(), this->model_.weightvec());
+      }
+
+      if (this->verbose_) {
+        std::cerr << "[INFO] finished round " << (round+1) << std::endl;
+        state_->unsafesnapshot(this->model_.weightvec());
+        std::cerr << "[INFO] current risk: "
+                  << this->model_.empirical_risk(transformed) << std::endl;
       }
     }
     state_->unsafesnapshot(this->model_.weightvec());
@@ -179,7 +191,7 @@ private:
        dataset::const_iterator begin,
        dataset::const_iterator end)
   {
-    size_t i = 0;
+    size_t i = 1;
     for (auto it = begin; it != end; ++it, ++i) {
       const size_t t_eff = (round-1)*dataset_size + i + t_offset_;
       const double eta_t = c0_ / (this->model_.get_lambda() * t_eff);
