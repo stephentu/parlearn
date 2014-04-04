@@ -11,6 +11,7 @@
 
 #include <ascii_file.hh>
 #include <binary_file.hh>
+#include <svmlight_file.hh>
 #include <dataset.hh>
 #include <vec.hh>
 #include <pretty_printers.hh>
@@ -38,7 +39,10 @@ evalclf(const Clf &clf,
   const double train_acc = eval.score(training.get_y(), train_predictions);
   const double test_acc  = eval.score(testing.get_y(), test_predictions);
 
-  cout << "[INFO] w: " << clf.get_model().weightvec() << endl;
+  if (clf.get_model().weightvec().size() <= 100)
+    cout << "[INFO] w: " << clf.get_model().weightvec() << endl;
+  else
+    cout << "[INFO] w dim too large to print" << endl;
   cout << "[INFO] norm(w): " << clf.get_model().weightvec().norm() << endl;
   cout << "[INFO] infnorm(w): " << clf.get_model().weightvec().infnorm() << endl;
   cout << "[INFO] empirical risk: " << clf.get_model().empirical_risk(training) << endl;
@@ -111,7 +115,8 @@ int
 main(int argc, char **argv)
 {
   string binary_training_file, binary_testing_file,
-         ascii_training_file, ascii_testing_file;
+         ascii_training_file, ascii_testing_file,
+         svmlight_training_file, svmlight_testing_file;
   double lambda = 1e-5;
   size_t nrounds = 1;
   size_t offset = 0;
@@ -119,18 +124,20 @@ main(int argc, char **argv)
   while (1) {
     static struct option long_options[] =
     {
-      {"binary-training-file" , required_argument , 0 , 'r'},
-      {"binary-testing-file"  , required_argument , 0 , 't'},
-      {"ascii-training-file"  , required_argument , 0 , 'a'},
-      {"ascii-testing-file"   , required_argument , 0 , 'b'},
-      {"lambda"               , required_argument , 0 , 'l'},
-      {"rounds"               , required_argument , 0 , 'n'},
-      {"offset"               , required_argument , 0 , 'o'},
-      {"threads"              , required_argument , 0 , 'w'},
+      {"binary-training-file"   , required_argument , 0 , 'r'} ,
+      {"binary-testing-file"    , required_argument , 0 , 't'} ,
+      {"ascii-training-file"    , required_argument , 0 , 'a'} ,
+      {"ascii-testing-file"     , required_argument , 0 , 'b'} ,
+      {"svmlight-training-file" , required_argument , 0 , 'c'} ,
+      {"svmlight-testing-file"  , required_argument , 0 , 'd'} ,
+      {"lambda"                 , required_argument , 0 , 'l'} ,
+      {"rounds"                 , required_argument , 0 , 'n'} ,
+      {"offset"                 , required_argument , 0 , 'o'} ,
+      {"threads"                , required_argument , 0 , 'w'} ,
       {0, 0, 0, 0}
     };
     int option_index = 0;
-    int c = getopt_long(argc, argv, "r:t:a:b:l:n:o:w:", long_options, &option_index);
+    int c = getopt_long(argc, argv, "r:t:a:b:c:d:l:n:o:w:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -157,6 +164,14 @@ main(int argc, char **argv)
       ascii_testing_file = optarg;
       break;
 
+    case 'c':
+      svmlight_training_file = optarg;
+      break;
+
+    case 'd':
+      svmlight_testing_file = optarg;
+      break;
+
     case 'l':
       lambda = strtod(optarg, nullptr);
       break;
@@ -178,13 +193,20 @@ main(int argc, char **argv)
     }
   }
 
-  if (!(ascii_training_file.empty() ^ binary_training_file.empty()))
-    throw runtime_error("need one of --ascii-training-file or --binary-training-file");
+  if ((!ascii_training_file.empty() +
+       !binary_training_file.empty() +
+       !svmlight_training_file.empty()) != 1)
+    throw runtime_error("need exactly one of --ascii-training-file, "
+        "--binary-training-file, or --svmlight-training-file");
 
-  if (!(ascii_testing_file.empty() ^ binary_testing_file.empty()))
-    throw runtime_error("need one of --binary-training-file or --binary-training-file");
+  if ((!ascii_testing_file.empty() +
+       !binary_testing_file.empty() +
+       !svmlight_testing_file.empty()) != 1)
+    throw runtime_error("need exactly one of --ascii-testing-file, "
+        "--binary-testing-file, or --svmlight-testing-file");
 
-  if (ascii_training_file.empty() != ascii_testing_file.empty())
+  if (ascii_training_file.empty() != ascii_testing_file.empty() ||
+      binary_training_file.empty() != binary_testing_file.empty())
     throw runtime_error("limitation: input file types must match for training and testing");
 
   if (lambda <= 0.0)
@@ -206,16 +228,24 @@ main(int argc, char **argv)
     auto reg_builder =
       [lambda](const dataset &, PRNG &)
       { return model::linear_model<loss_fn>(lambda); };
-		go<model::linear_model<loss_fn>, ascii_file>(
-				ascii_training_file, ascii_testing_file,
-				reg_builder, nrounds, nworkers, offset);
-  } else {
+    go<model::linear_model<loss_fn>, ascii_file>(
+        ascii_training_file, ascii_testing_file,
+        reg_builder, nrounds, nworkers, offset);
+  } else if (!binary_training_file.empty()) {
     auto reg_builder =
       [lambda](const dataset &, PRNG &)
       { return model::linear_model<loss_fn>(lambda); };
-		go<model::linear_model<loss_fn>, binary_file>(
-				binary_training_file, binary_testing_file,
-				reg_builder, nrounds, nworkers, offset);
+    go<model::linear_model<loss_fn>, binary_file>(
+        binary_training_file, binary_testing_file,
+        reg_builder, nrounds, nworkers, offset);
+  } else {
+    ALWAYS_ASSERT(!svmlight_training_file.empty());
+    auto reg_builder =
+      [lambda](const dataset &, PRNG &)
+      { return model::linear_model<loss_fn>(lambda); };
+    go<model::linear_model<loss_fn>, svmlight_file>(
+        svmlight_training_file, svmlight_testing_file,
+        reg_builder, nrounds, nworkers, offset);
   }
 
   return 0;
