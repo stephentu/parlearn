@@ -148,7 +148,9 @@ public:
     assert(idx < impl_.size());
     const version_t v = impl_[idx].first;
     assert(v & LOCK_MASK);
-    impl_[idx].first = v & ~LOCK_MASK;
+    const version_t newv = (((v>>1)+1)<<1);
+    assert(!(v & LOCK_MASK));
+    impl_[idx].first = newv;
   }
 
 	inline void

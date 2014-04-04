@@ -91,15 +91,17 @@ go(const string &training_file, const string &testing_file,
 
   Model model = builder(training, *prng);
 
-  opt::gd<Model, PRNG> clf_gd(
-      model, nrounds, prng, offset, 1.0, true);
-  {
-    scoped_timer t("training");
-    clf_gd.fit(training);
-  }
+  if (test_gd) {
+    opt::gd<Model, PRNG> clf_gd(
+        model, nrounds, prng, offset, 1.0, true);
+    {
+      scoped_timer t("training");
+      clf_gd.fit(training);
+    }
 
-  cerr << "evaluting gd" << endl;
-  evalclf(clf_gd, training, testing);
+    cerr << "evaluting gd" << endl;
+    evalclf(clf_gd, training, testing);
+  }
 
   opt::parsgd<Model, PRNG> clf_nolocking(
       model, nrounds, prng, nworkers, false, offset, 1.0, true);
@@ -132,7 +134,7 @@ main(int argc, char **argv)
   size_t nrounds = 1;
   size_t offset = 0;
   size_t nworkers = 1;
-  bool test_gd = true;
+  bool test_gd = false;
   while (1) {
     static struct option long_options[] =
     {
