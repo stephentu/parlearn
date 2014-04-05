@@ -53,6 +53,7 @@ public:
     if (this->verbose_) {
       std::cerr << "[INFO] materializing took " << tt.lap_ms() << " ms" << std::endl;
       std::cerr << "[INFO] max transformed norm is " << transformed.max_x_norm() << std::endl;
+      std::cerr << "[INFO] keep_histories: " << keep_histories << std::endl;
     }
 
     const auto shape = transformed.get_x_shape();
@@ -64,6 +65,7 @@ public:
     this->model_.weightvec().resize(shape.second);
 
     standard_vec_t accum(shape.second);
+    timer tt1;
     for (size_t round = 0; round < this->nrounds_; round++) {
       const size_t t_eff = (1+round) + t_offset_;
       const double eta_t = c0_ / (this->model_.get_lambda() * t_eff);
@@ -87,7 +89,8 @@ public:
       this->model_.weightvec() -= accum;
 
       if (this->verbose_) {
-        std::cerr << "[INFO] finished round " << (round+1) << std::endl;
+        std::cerr << "[INFO] finished round " << (round+1) << " in "
+                  << tt1.lap_ms() << " ms" << std::endl;
         std::cerr << "[INFO] current risk: "
                   << this->model_.empirical_risk(transformed) << std::endl;
         std::cerr << "[INFO] step size: " << eta_t << std::endl;

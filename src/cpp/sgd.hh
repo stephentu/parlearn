@@ -15,7 +15,7 @@
 #include <timer.hh>
 #include <model.hh>
 #include <classifier.hh>
-#include <tvec.hh>
+#include <lvec.hh>
 #include <task_executor.hh>
 
 namespace opt {
@@ -69,7 +69,7 @@ public:
     //      std::cerr << "[WARN] feature idx " << i << " is never used!" << std::endl;
     //}
 
-    this->state_.reset(new standard_tvec<double>(shape.second));
+    this->state_.reset(new standard_lvec<double>(shape.second));
     this->w_history_.clear();
     if (keep_histories)
       this->w_history_.reserve(this->nrounds_);
@@ -79,6 +79,7 @@ public:
     const size_t actual_nworkers =
       (this->training_sz_ < nworkers_) ? 1 : nworkers_;
     if (this->verbose_) {
+      std::cerr << "[INFO] keep_histories: " << keep_histories << std::endl;
       std::cerr << "[INFO] actual_nworkers: " << actual_nworkers << std::endl;
       std::cerr << "[INFO] starting eta_t: "
                 << c0_ / (this->model_.get_lambda() * (1 + this->t_offset_))
@@ -90,6 +91,7 @@ public:
       this->training_sz_ / actual_nworkers;
     tt.lap();
     std::vector<std::future<bool>> futures;
+    timer tt1;
     for (size_t round = 0; round < this->nrounds_; round++) {
       const auto permutation = transformed.permute(*this->prng_);
       const auto it_end = permutation.end();
@@ -124,7 +126,8 @@ public:
       }
 
       if (this->verbose_) {
-        std::cerr << "[INFO] finished round " << (round+1) << std::endl;
+        std::cerr << "[INFO] finished round " << (round+1) << " in "
+                  << tt1.lap_ms() << " ms" << std::endl;
         state_->unsafesnapshot(this->model_.weightvec());
         std::cerr << "[INFO] current risk: "
                   << this->model_.empirical_risk(transformed) << std::endl;
@@ -160,7 +163,7 @@ private:
 
   template <bool DoLocking>
   static inline double
-  dot(const vec_t &x, standard_tvec<double> &b)
+  dot(const vec_t &x, standard_lvec<double> &b)
   {
     double s = 0.0;
     const auto inner_it_end = x.end();
@@ -212,7 +215,7 @@ private:
   double c0_;
   size_t nworkers_;
   bool do_locking_;
-  std::unique_ptr<standard_tvec<double>> state_;
+  std::unique_ptr<standard_lvec<double>> state_;
 };
 
 } // namespace opt
