@@ -95,33 +95,30 @@ go(const string &training_file, const string &testing_file,
     opt::gd<Model, PRNG> clf_gd(
         model, nrounds, prng, offset, 1.0, true);
     {
-      scoped_timer t("training");
+      scoped_timer t("training GD");
       clf_gd.fit(training);
     }
-
     cerr << "evaluting gd" << endl;
     evalclf(clf_gd, training, testing);
   }
 
-  opt::parsgd<Model, PRNG> clf_nolocking(
-      model, nrounds, prng, nworkers, false, offset, 1.0, true);
-  {
-    scoped_timer t("training");
-    clf_nolocking.fit(training);
-  }
-
-  cerr << "evaluting no-locking" << endl;
-  evalclf(clf_nolocking, training, testing);
-
   opt::parsgd<Model, PRNG> clf_locking(
       model, nrounds, prng, nworkers, true, offset, 1.0, true);
   {
-    scoped_timer t("training");
+    scoped_timer t("training SGD-locking");
     clf_locking.fit(training);
   }
-
   cerr << "evaluting locking" << endl;
   evalclf(clf_locking, training, testing);
+
+  opt::parsgd<Model, PRNG> clf_nolocking(
+      model, nrounds, prng, nworkers, false, offset, 1.0, true);
+  {
+    scoped_timer t("training SGD-no-locking");
+    clf_nolocking.fit(training);
+  }
+  cerr << "evaluting no-locking" << endl;
+  evalclf(clf_nolocking, training, testing);
 }
 
 int

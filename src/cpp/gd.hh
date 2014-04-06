@@ -67,6 +67,7 @@ public:
     standard_vec_t accum(shape.second);
     timer tt1;
     for (size_t round = 0; round < this->nrounds_; round++) {
+      tt1.lap();
       const size_t t_eff = (1+round) + t_offset_;
       const double eta_t = c0_ / (this->model_.get_lambda() * t_eff);
       accum.reset();

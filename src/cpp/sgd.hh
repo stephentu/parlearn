@@ -104,6 +104,7 @@ public:
       const auto it_beg = transformed.begin();
       */
 
+      tt1.lap();
       for (size_t i = 0; i < actual_nworkers; i++)
         futures.emplace_back(
           workers[i]->enq(
@@ -171,8 +172,9 @@ private:
          inner_it != inner_it_end; ++inner_it) {
       const size_t feature_idx = inner_it.tell();
       if (DoLocking)
-        b.lock(feature_idx);
-      s += (*inner_it) * b.unsaferead(feature_idx);
+        s += (*inner_it) * b.lockandread(feature_idx);
+      else
+        s += (*inner_it) * b.unsaferead(feature_idx);
     }
     return s;
   }
@@ -203,9 +205,10 @@ private:
           (1.0 - eta_t * this->model_.get_lambda() * dataset_sizef /
            double(feature_counts[feature_idx])) * w_old
           - eta_t * dloss * (*inner_it);
-        state_->unsafewrite(feature_idx, w_new);
         if (DoLocking)
-          state_->unlock(feature_idx);
+          state_->writeandunlock(feature_idx, w_new);
+        else
+          state_->unsafewrite(feature_idx, w_new);
       }
     }
     return false;

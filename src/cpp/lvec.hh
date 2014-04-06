@@ -38,8 +38,15 @@ public:
   inline void
   lock(size_t idx)
   {
+    lockandread(idx);
+  }
+
+  inline T
+  lockandread(size_t idx)
+  {
     assert(idx < impl_.size());
-    uint_type * const px = reinterpret_cast<uint_type *>(&impl_[idx]);
+    T * const tpx = &impl_[idx];
+    uint_type * const px = reinterpret_cast<uint_type *>(tpx);
     uint_type v = *px;
     while ((v & LOCK_MASK) ||
            !__sync_bool_compare_and_swap(px, v, v | LOCK_MASK)) {
@@ -47,6 +54,19 @@ public:
       v = *px;
     }
     compiler_barrier();
+    assert(*px & LOCK_MASK);
+    return *tpx;
+  }
+
+  inline void
+  writeandunlock(size_t idx, const T &t)
+  {
+    assert(idx < impl_.size());
+    compiler_barrier();
+    uint_type * const px = reinterpret_cast<uint_type *>(&impl_[idx]);
+    assert(*px & LOCK_MASK);
+    const uint_type * const tpx = reinterpret_cast<const uint_type *>(&t);
+    *px = (*tpx & ~LOCK_MASK);
   }
 
   inline void
