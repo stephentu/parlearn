@@ -45,17 +45,21 @@ public:
   lockandread(size_t idx)
   {
     assert(idx < impl_.size());
-    T * const tpx = &impl_[idx];
-    uint_type * const px = reinterpret_cast<uint_type *>(tpx);
-    uint_type v = *px;
-    while ((v & LOCK_MASK) ||
-           !__sync_bool_compare_and_swap(px, v, v | LOCK_MASK)) {
+    volatile uint_type * const px =
+      reinterpret_cast<volatile uint_type *>(&impl_[idx]);
+    union {
+      uint_type v;
+      T f;
+    } u;
+    u.v = *px;
+    while ((u.v & LOCK_MASK) ||
+           !__sync_bool_compare_and_swap(px, u.v, u.v | LOCK_MASK)) {
       nop_pause();
-      v = *px;
+      u.v = *px;
     }
     compiler_barrier();
     assert(*px & LOCK_MASK);
-    return *tpx;
+    return u.f;
   }
 
   inline void

@@ -13,6 +13,7 @@ ifeq ($(strip $(DEBUG)),1)
         CXXFLAGS := -MD -I$(PWD) -Wall -g -fno-omit-frame-pointer --std=c++0x
 else
         CXXFLAGS := -MD -DNDEBUG -I$(PWD) -Wall -Werror -O3 -funroll-loops -ffast-math -fno-omit-frame-pointer --std=c++0x
+        #CXXFLAGS := -MD -I$(PWD) -Wall -Werror -O2 -fno-omit-frame-pointer --std=c++0x
 endif
 
 LDFLAGS := -lpthread -lrt -ltbb -lnuma

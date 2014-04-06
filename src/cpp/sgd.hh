@@ -111,6 +111,7 @@ public:
             std::bind(
               do_locking_ ? &parsgd::work<true> : &parsgd::work<false>,
               this,
+              i,
               round+1,
               this->training_sz_,
               std::ref(feature_counts),
@@ -181,7 +182,8 @@ private:
 
   template <bool DoLocking>
   bool
-  work(size_t round,
+  work(size_t workerid,
+       size_t round,
        size_t dataset_size,
        const std::vector<size_t> &feature_counts,
        dataset::const_iterator begin,
@@ -210,6 +212,7 @@ private:
         else
           state_->unsafewrite(feature_idx, w_new);
       }
+      //std::cerr << "[worker " << workerid << ", round " << round << ", item " << i << "]" << std::endl;
     }
     return false;
   }
