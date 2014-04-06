@@ -4,6 +4,7 @@
 #include <vector>
 #include <random>
 #include <type_traits>
+#include <memory>
 #include <vec.hh>
 #include <util.hh>
 #include <macros.hh>

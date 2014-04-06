@@ -31,7 +31,7 @@ endif
 SRCFILES := dataset.cc
 OBJFILES = $(SRCFILES:.cc=.o)
 
-PROGS := tlearn converters/convert
+PROGS := tlearn converters/convert tools/featurehist
 
 all: $(PROGS)
 
@@ -41,11 +41,11 @@ all: $(PROGS)
 $(PROGS): %: %.o $(OBJFILES)
 	$(CXX) $< -o $@ $(OBJFILES) $(LDFLAGS)
 
-DEPFILES := $(wildcard *.d converters/*.d)
+DEPFILES := $(wildcard *.d converters/*.d tools/*.d)
 ifneq ($(DEPFILES),)
 -include $(DEPFILES)
 endif
 
 .PHONY: clean
 clean:
-	rm -f *.o *.d converters/*.o converters/*.d $(PROGS)
+	rm -f *.o *.d {converters,tools}/*.o {converters,tools}/*.d $(PROGS)
