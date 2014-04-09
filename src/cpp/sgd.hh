@@ -85,8 +85,9 @@ public:
                 << c0_ / (this->model_.get_lambda() * (1 + this->t_offset_))
                 << std::endl;
     }
-    for (size_t i = 0; i < actual_nworkers; i++)
-      workers.emplace_back(new task_executor_thread<bool>);
+    if (actual_nworkers > 1)
+      for (size_t i = 0; i < actual_nworkers; i++)
+        workers.emplace_back(new task_executor_thread<bool>);
     const size_t nelems_per_worker =
       this->training_sz_ / actual_nworkers;
     tt.lap();
@@ -105,22 +106,30 @@ public:
       */
 
       tt1.lap();
-      for (size_t i = 0; i < actual_nworkers; i++)
-        futures.emplace_back(
-          workers[i]->enq(
-            std::bind(
-              do_locking_ ? &parsgd::work<true> : &parsgd::work<false>,
-              this,
-              i,
-              round+1,
-              this->training_sz_,
-              std::ref(feature_counts),
-              it_beg + i*nelems_per_worker,
-              ((i+1)==actual_nworkers) ?
-                it_end : (it_beg + (i+1)*nelems_per_worker))));
-      for (auto &f : futures)
-        f.wait();
-      futures.clear();
+      if (actual_nworkers > 1) {
+        for (size_t i = 0; i < actual_nworkers; i++)
+          futures.emplace_back(
+            workers[i]->enq(
+              std::bind(
+                do_locking_ ? &parsgd::work<true> : &parsgd::work<false>,
+                this,
+                i,
+                round+1,
+                this->training_sz_,
+                std::ref(feature_counts),
+                it_beg + i*nelems_per_worker,
+                ((i+1)==actual_nworkers) ?
+                  it_end : (it_beg + (i+1)*nelems_per_worker))));
+        for (auto &f : futures)
+          f.wait();
+        futures.clear();
+      } else {
+        if (do_locking_)
+          work<true>(0, round+1, this->training_sz_, feature_counts, it_beg, it_end);
+        else
+          work<false>(0, round+1, this->training_sz_, feature_counts, it_beg, it_end);
+      }
+
       if (keep_histories) {
         state_->unsafesnapshot(this->model_.weightvec());
         this->w_history_.emplace_back(
@@ -191,6 +200,7 @@ private:
   {
     const double dataset_sizef = double(dataset_size);
     size_t i = 1;
+    //std::cerr << "[worker " << workerid << ", round " << round << ", elems" << size_t(end-begin) << "]" << std::endl;
     for (auto it = begin; it != end; ++it, ++i) {
       const size_t t_eff = (round-1)*dataset_size + i + t_offset_;
       const double eta_t = c0_ / (this->model_.get_lambda() * t_eff);
