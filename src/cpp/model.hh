@@ -370,7 +370,7 @@ public:
     fourier_samples_.resize(kdim);
     for (size_t i = 0; i < kdim; i++)
       fourier_samples_[i] = kernel_.sample_fourier(xdim, prng);
-    std::uniform_real_distribution<double> unif(0.0, 2.0 * M_PIl);
+    std::uniform_real_distribution<double> unif(0.0, 2.0 * M_PI);
     b_samples_.resize(kdim);
     for (size_t i = 0; i < kdim; i++)
       b_samples_[i] = unif(prng);

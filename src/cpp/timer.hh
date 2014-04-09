@@ -8,6 +8,11 @@
 #include <iostream>
 #include <macros.hh>
 
+#if defined(__APPLE__) && defined(__MACH__)
+#include <mach/clock.h>
+#include <mach/mach.h>
+#endif
+
 class timer {
 private:
   timer(const timer &) = delete;
@@ -16,9 +21,9 @@ private:
 
 public:
 
-  enum Mode { CLK_GETTIMEOFDAY, CLK_REALTIME };
+  enum Mode { T_CLK_GETTIMEOFDAY, T_CLK_REALTIME };
 
-  timer(Mode m = CLK_GETTIMEOFDAY)
+  timer(Mode m = T_CLK_GETTIMEOFDAY)
     : m_(m)
   {
     lap();
@@ -60,19 +65,35 @@ public:
   static inline uint64_t
   cur_usec(Mode m)
   {
-    if (m == CLK_GETTIMEOFDAY) {
+    if (m == T_CLK_GETTIMEOFDAY) {
       struct timeval tv;
       gettimeofday(&tv, 0);
       return ((uint64_t)tv.tv_sec) * 1000000 + tv.tv_usec;
     } else {
-      assert(m == CLK_REALTIME);
+      assert(m == T_CLK_REALTIME);
       struct timespec ts;
-      clock_gettime(CLOCK_REALTIME, &ts);
+      current_utc_time(&ts);
       return ((uint64_t)ts.tv_sec) * 1000000 + (((uint64_t)ts.tv_nsec) / 1000);
     }
   }
 
 private:
+
+  static inline void
+  current_utc_time(struct timespec *ts)
+  {
+#if defined(__APPLE__) && defined(__MACH__)
+    clock_serv_t cclock;
+    mach_timespec_t mts;
+    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+    clock_get_time(cclock, &mts);
+    mach_port_deallocate(mach_task_self(), cclock);
+    ts->tv_sec = mts.tv_sec;
+    ts->tv_nsec = mts.tv_nsec;
+#else
+    clock_gettime(CLOCK_REALTIME, ts);
+#endif
+  }
 
   Mode m_;
   uint64_t start_;
@@ -86,7 +107,7 @@ private:
 
 public:
   scoped_timer(const std::string &region,
-               timer::Mode m = timer::CLK_GETTIMEOFDAY,
+               timer::Mode m = timer::T_CLK_GETTIMEOFDAY,
                bool enabled = true)
     : t(m), region(region), enabled(enabled)
   {}

@@ -12,7 +12,10 @@
 #include <atomic>
 #include <future>
 
+#if defined(__linux__)
 #include <numa.h>
+#endif
+
 #include <sched.h>
 
 // task executor object itself is not thread-safe
@@ -82,12 +85,15 @@ private:
   void
   loop(int node)
   {
+    // thread pinning currently unimplemented for OS-X
+#if defined(__linux__)
     if (node != -1) {
       int ret = numa_run_on_node(node);
       if (ret)
         assert(false);
       sched_yield();
     }
+#endif
 
     while (running_.load()) {
       std::unique_lock<std::mutex> l(m_);

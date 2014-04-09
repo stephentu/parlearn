@@ -16,7 +16,11 @@ else
         #CXXFLAGS := -MD -I$(PWD) -Wall -Werror -O2 -fno-omit-frame-pointer --std=c++0x
 endif
 
-LDFLAGS := -lpthread -lrt -ltbb -lnuma
+LDFLAGS := -lpthread -ltbb
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+	LDFLAGS+=-lrt -lnuma
+endif
 
 ifeq ($(strip $(USE_MALLOC_MODE)),1)
         CXXFLAGS+=-DUSE_JEMALLOC
