@@ -1,6 +1,23 @@
 #pragma once
 
+#include <cmath>
+
 namespace loss_functions {
+
+class logistic_loss {
+public:
+  inline double
+  loss(double y, double haty) const
+  {
+    return log(1. + exp(-y*haty));
+  }
+
+  inline double
+  dloss(double y, double haty) const
+  {
+    return -y/(1. + exp(y*haty));
+  }
+};
 
 class square_loss {
 public:

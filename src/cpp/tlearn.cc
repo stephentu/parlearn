@@ -23,9 +23,11 @@
 #include <util.hh>
 
 using namespace std;
+using namespace model;
+using namespace loss_functions;
 
-typedef loss_functions::hinge_loss loss_fn;
 typedef default_random_engine PRNG;
+typedef vector<vec_t> matrix_t;
 
 template <typename Clf>
 static void
@@ -53,17 +55,67 @@ evalclf(const Clf &clf,
   cout << "[INFO] acc on test: " << test_acc << endl;
 }
 
-template <typename Model, typename Loader>
+template <typename Clf>
 static void
-go(const string &training_file, const string &testing_file,
-   function<Model(const dataset&, PRNG&)> builder,
-   size_t nrounds, size_t nworkers,
-   size_t offset, bool test_gd, Loader loader = Loader())
+execclf(Clf &clf, const dataset &training, const dataset &testing)
 {
-  typedef vector<vec_t> matrix_t;
+  {
+    scoped_timer t("training phase");
+    clf.fit(training);
+  }
+  cerr << "evalution phase..." << endl;
+  evalclf(clf, training, testing);
+}
 
-  matrix_t xtrain, xtest;
-  standard_vec_t ytrain, ytest;
+enum class ClfType { CLF_GD, CLF_SGD_NOLOCK, CLF_SGD_LOCK };
+
+// why isn't this auto-generated?
+static const char *
+clftype_str(ClfType t)
+{
+  switch (t) {
+  case ClfType::CLF_GD: return "CLF_GD";
+  case ClfType::CLF_SGD_NOLOCK: return "CLF_SGD_NOLOCK";
+  case ClfType::CLF_SGD_LOCK: return "CLF_SGD_LOCK";
+  default: return nullptr;
+  }
+}
+
+template <typename LossFn>
+static void
+go(const dataset &training, const dataset &testing,
+   ClfType clftype, double lambda,
+   size_t nrounds, size_t nworkers, size_t offset)
+{
+  const unsigned seed =
+    chrono::system_clock::now().time_since_epoch().count();
+  shared_ptr<PRNG> prng(new PRNG(seed));
+
+  typedef linear_model<LossFn> Model;
+  Model model(lambda);
+
+  if (clftype == ClfType::CLF_GD) {
+    opt::gd<Model, PRNG> clf(
+        model, nrounds, prng, offset, 1.0, true);
+    execclf(clf, training, testing);
+  } else if (clftype == ClfType::CLF_SGD_NOLOCK) {
+    opt::parsgd<Model, PRNG> clf(
+        model, nrounds, prng, nworkers, false, offset, 1.0, true);
+    execclf(clf, training, testing);
+  } else /* if (clftype == ClfType::CLF_SGD_LOCK) */ {
+    opt::parsgd<Model, PRNG> clf(
+        model, nrounds, prng, nworkers, true, offset, 1.0, true);
+    execclf(clf, training, testing);
+  }
+}
+
+template <typename Loader>
+static void
+load(const string &training_file, const string &testing_file,
+     matrix_t &xtrain, standard_vec_t &ytrain,
+     matrix_t &xtest, standard_vec_t &ytest,
+     Loader loader = Loader())
+{
   unsigned int nfeatures_train, nfeatures_test;
   {
     scoped_timer t("load training");
@@ -71,54 +123,12 @@ go(const string &training_file, const string &testing_file,
       throw runtime_error("could not read training file");
   }
   cout << "[INFO] training set n=" << xtrain.size() << endl;
-
   {
     scoped_timer t("load testing");
     if (loader.read_feature_file(testing_file, xtest, ytest, nfeatures_test))
       throw runtime_error("could not read testing file");
   }
   cout << "[INFO] testing set n=" << xtest.size() << endl;
-
-  dataset training(move(xtrain), move(ytrain));
-  dataset testing(move(xtest), move(ytest));
-  training.set_parallel_materialize(true);
-  testing.set_parallel_materialize(true);
-  cout << "[INFO] training max norm " << training.max_x_norm() << endl;
-
-  const unsigned seed =
-    chrono::system_clock::now().time_since_epoch().count();
-  shared_ptr<PRNG> prng(new PRNG(seed));
-
-  Model model = builder(training, *prng);
-
-  if (test_gd) {
-    opt::gd<Model, PRNG> clf_gd(
-        model, nrounds, prng, offset, 1.0, true);
-    {
-      scoped_timer t("training GD");
-      clf_gd.fit(training);
-    }
-    cerr << "evaluting gd" << endl;
-    evalclf(clf_gd, training, testing);
-  }
-
-  opt::parsgd<Model, PRNG> clf_locking(
-      model, nrounds, prng, nworkers, true, offset, 1.0, true);
-  {
-    scoped_timer t("training SGD-locking");
-    clf_locking.fit(training);
-  }
-  cerr << "evaluting locking" << endl;
-  evalclf(clf_locking, training, testing);
-
-  opt::parsgd<Model, PRNG> clf_nolocking(
-      model, nrounds, prng, nworkers, false, offset, 1.0, true);
-  {
-    scoped_timer t("training SGD-no-locking");
-    clf_nolocking.fit(training);
-  }
-  cerr << "evaluting no-locking" << endl;
-  evalclf(clf_nolocking, training, testing);
 }
 
 int
@@ -127,11 +137,12 @@ main(int argc, char **argv)
   string binary_training_file, binary_testing_file,
          ascii_training_file, ascii_testing_file,
          svmlight_training_file, svmlight_testing_file;
+  string lossfn = "hinge";
+  ClfType clftype = ClfType::CLF_SGD_NOLOCK;
   double lambda = 1e-5;
   size_t nrounds = 1;
   size_t offset = 0;
   size_t nworkers = 1;
-  bool test_gd = false;
   while (1) {
     static struct option long_options[] =
     {
@@ -145,10 +156,12 @@ main(int argc, char **argv)
       {"rounds"                 , required_argument , 0 , 'n'} ,
       {"offset"                 , required_argument , 0 , 'o'} ,
       {"threads"                , required_argument , 0 , 'w'} ,
+      {"loss"                   , required_argument , 0 , 'f'} ,
+      {"clf"                    , required_argument , 0 , 'g'} ,
       {0, 0, 0, 0}
     };
     int option_index = 0;
-    int c = getopt_long(argc, argv, "r:t:a:b:c:d:l:n:o:w:", long_options, &option_index);
+    int c = getopt_long(argc, argv, "r:t:a:b:c:d:l:n:o:w:f:g:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -199,6 +212,24 @@ main(int argc, char **argv)
       nworkers = strtoull(optarg, nullptr, 10);
       break;
 
+    case 'f':
+      lossfn = optarg;
+      break;
+
+    case 'g':
+      {
+        string o(optarg);
+        if (o == "gd")
+          clftype = ClfType::CLF_GD;
+        else if (o == "sgd-nolock")
+          clftype = ClfType::CLF_SGD_NOLOCK;
+        else if (o == "sgd-lock")
+          clftype = ClfType::CLF_SGD_LOCK;
+        else
+          throw runtime_error("Invalid clf: " + o);
+      }
+      break;
+
     default:
       abort();
     }
@@ -227,37 +258,47 @@ main(int argc, char **argv)
   if (nworkers <= 0)
     throw runtime_error("need nworkers > 0");
 
+  if (lossfn != "logistic" && lossfn != "square" &&
+      lossfn != "hinge" && lossfn != "ramp")
+    throw runtime_error("invalid loss function: " + lossfn);
+
   cerr << "[INFO] PID=" << getpid() << endl;
   cerr << "[INFO] lambda=" << lambda
        << ", rounds=" << nrounds
        << ", offset=" << offset
        << ", nworkers=" << nworkers
+       << ", lossfn=" << lossfn
+       << ", clf=" << clftype_str(clftype)
        << endl;
 
-  using namespace std::placeholders;
-  if (!ascii_training_file.empty()) {
-    auto reg_builder =
-      [lambda](const dataset &, PRNG &)
-      { return model::linear_model<loss_fn>(lambda); };
-    go<model::linear_model<loss_fn>, ascii_file>(
-        ascii_training_file, ascii_testing_file,
-        reg_builder, nrounds, nworkers, offset, test_gd);
-  } else if (!binary_training_file.empty()) {
-    auto reg_builder =
-      [lambda](const dataset &, PRNG &)
-      { return model::linear_model<loss_fn>(lambda); };
-    go<model::linear_model<loss_fn>, binary_file>(
-        binary_training_file, binary_testing_file,
-        reg_builder, nrounds, nworkers, offset, test_gd);
-  } else {
-    ALWAYS_ASSERT(!svmlight_training_file.empty());
-    auto reg_builder =
-      [lambda](const dataset &, PRNG &)
-      { return model::linear_model<loss_fn>(lambda); };
-    go<model::linear_model<loss_fn>, svmlight_file>(
-        svmlight_training_file, svmlight_testing_file,
-        reg_builder, nrounds, nworkers, offset, test_gd);
-  }
+  // load the dataset
+  matrix_t xtrain, xtest;
+  standard_vec_t ytrain, ytest;
+  if (!ascii_training_file.empty())
+    load<ascii_file>(ascii_training_file, ascii_testing_file,
+                     xtrain, ytrain, xtest, ytest);
+  else if (!binary_training_file.empty())
+    load<binary_file>(binary_training_file, binary_testing_file,
+                      xtrain, ytrain, xtest, ytest);
+  else /* if (!svmlight_training_file.empty()) */
+    load<svmlight_file>(svmlight_training_file, svmlight_testing_file,
+                        xtrain, ytrain, xtest, ytest);
+
+  dataset training(move(xtrain), move(ytrain));
+  dataset testing(move(xtest), move(ytest));
+  training.set_parallel_materialize(true);
+  testing.set_parallel_materialize(true);
+  cout << "[INFO] training max norm " << training.max_x_norm() << endl;
+
+  // build the model
+  if (lossfn == "logistic")
+    go<logistic_loss>(training, testing, clftype, lambda, nrounds, nworkers, offset);
+  else if (lossfn == "square")
+    go<square_loss>(training, testing, clftype, lambda, nrounds, nworkers, offset);
+  else if (lossfn == "hinge")
+    go<hinge_loss>(training, testing, clftype, lambda, nrounds, nworkers, offset);
+  else /* if (lossfn == "ramp") */
+    go<ramp_loss>(training, testing, clftype, lambda, nrounds, nworkers, offset);
 
   return 0;
 }
