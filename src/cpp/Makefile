@@ -7,13 +7,15 @@ DEBUG ?= 0
 # 2 = tcmalloc
 USE_MALLOC_MODE ?= 1
 
+EXTRA_CXXFLAGS ?=
+EXTRA_LDFLAGS ?=
+
 PWD := $(shell pwd)
 
 ifeq ($(strip $(DEBUG)),1)
-        CXXFLAGS := -MD -I$(PWD) -Wall -g -fno-omit-frame-pointer --std=c++0x
+        CXXFLAGS := -MD -I$(PWD) -Wall -g -fno-omit-frame-pointer --std=c++0x $(EXTRA_CXXFLAGS)
 else
-        CXXFLAGS := -MD -DNDEBUG -I$(PWD) -Wall -Werror -O3 -funroll-loops -ffast-math -fno-omit-frame-pointer --std=c++0x
-        #CXXFLAGS := -MD -I$(PWD) -Wall -Werror -O2 -fno-omit-frame-pointer --std=c++0x
+        CXXFLAGS := -MD -DNDEBUG -I$(PWD) -Wall -Werror -O3 -funroll-loops -ffast-math -fno-omit-frame-pointer --std=c++0x $(EXTRA_CXXFLAGS)
 endif
 
 LDFLAGS := -lpthread -ltbb
@@ -21,6 +23,7 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	LDFLAGS+=-lrt -lnuma
 endif
+LDFLAGS += $(EXTRA_LDFLAGS)
 
 ifeq ($(strip $(USE_MALLOC_MODE)),1)
         CXXFLAGS+=-DUSE_JEMALLOC
