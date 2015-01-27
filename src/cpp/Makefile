@@ -13,9 +13,9 @@ EXTRA_LDFLAGS ?=
 PWD := $(shell pwd)
 
 ifeq ($(strip $(DEBUG)),1)
-        CXXFLAGS := -MD -I$(PWD) -Wall -g -fno-omit-frame-pointer --std=c++0x $(EXTRA_CXXFLAGS)
+        CXXFLAGS := -MD -I$(PWD) -Wall -g -fno-omit-frame-pointer --std=c++11 $(EXTRA_CXXFLAGS)
 else
-        CXXFLAGS := -MD -DNDEBUG -I$(PWD) -Wall -Werror -O3 -funroll-loops -ffast-math -fno-omit-frame-pointer --std=c++0x $(EXTRA_CXXFLAGS)
+        CXXFLAGS := -MD -DNDEBUG -I$(PWD) -Wall -Werror -O3 -funroll-loops -ffast-math -fno-omit-frame-pointer --std=c++11 $(EXTRA_CXXFLAGS)
 endif
 
 LDFLAGS := -lpthread -ltbb
