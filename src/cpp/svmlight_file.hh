@@ -32,14 +32,17 @@ read_feature_file(
     l >> y;
     ALWAYS_ASSERT(y == 0.0 || y == 1.0 || y == -1.0);
 
-    // namespace
-    if (ns.empty()) {
-      l >> ns;
-    } else {
-      l >> ns0;
-      if (ns != ns0)
-        return -1;
-    }
+    // NOTE: this namespace crap is only found in the VW-style modified
+    // svmlight files, so let's just ignore it for now.
+    //
+    //// namespace
+    //if (ns.empty()) {
+    //  l >> ns;
+    //} else {
+    //  l >> ns0;
+    //  if (ns != ns0)
+    //    return -1;
+    //}
 
     // features
     vec_t xv((vec_t::sparse_tag_t()));
